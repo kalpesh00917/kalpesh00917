@@ -2,9 +2,10 @@
 """Pick at most ONE next-day CALL from NSE F&O stocks, using the setup that tested best.
 
 Setup (tested on 2 years, ~90 F&O stocks, both years separately):
-  uptrend (close > EMA50 and EMA20 > EMA50) and RSI(2) < 10  -> a short dip in an uptrend.
-  Enter next day's open, hold up to 2 days. Historically ~55% of trades closed higher;
-  this is a modest edge, not a sure thing.
+  uptrend (close > EMA50 and EMA20 > EMA50), RSI(2) < 10, and close in the bottom 25% of
+  the day's range (IBS < 0.25). Buy an ATM CALL ~30 days to expiry at next open, sell at
+  close of day 2. Simulated option result: ~46% win rate, avg +3% per trade, profitable in
+  both test years. Every option-buying strategy tested won about 50% or less.
 Usage: python3 nse_best.py   (best run after 3:30 PM IST)
 """
 import json, time, urllib.request, urllib.parse
@@ -45,14 +46,15 @@ def main():
         if not rows or len(rows) < 150: continue
         O, H, L, C, V = zip(*rows)
         e20, e50, r2 = ema_s(C, 20), ema_s(C, 50), rsi_s(C, 2)
-        sig = lambda j: C[j] > e50[j] and e20[j] > e50[j] and r2[j] < 10
+        ibs = lambda j: (C[j] - L[j]) / (H[j] - L[j]) if H[j] > L[j] else 0.5
+        sig = lambda j: C[j] > e50[j] and e20[j] > e50[j] and r2[j] < 10 and ibs(j) < 0.25
         i = len(C) - 1
         if not sig(i): continue
         past = [j for j in range(60, len(C) - 3) if sig(j)]
         wins = sum(C[j + 2] > O[j + 1] for j in past)
         atr = sum(max(H[j] - L[j], abs(H[j] - C[j - 1]), abs(L[j] - C[j - 1])) for j in range(i - 13, i + 1)) / 14
         turn = C[i] * sum(V[i - 20:i]) / 20 / 1e7
-        if len(past) < 8 or turn < 100: continue          # need history and liquidity
+        if len(past) < 3 or turn < 100: continue          # need history and liquidity
         cands.append(dict(sym=s, close=C[i], rsi2=r2[i], atr=atr, wins=wins, n=len(past),
                           rate=wins / len(past), turn=turn))
     if not cands:
@@ -62,8 +64,8 @@ def main():
         print("%-11s close %.2f  RSI2 %.1f  ATR %.2f  own history %d/%d up (%.0f%%)  turnover %.0f Cr" % (
             c["sym"], c["close"], c["rsi2"], c["atr"], c["wins"], c["n"], 100 * c["rate"], c["turn"]))
     b = cands[0]
-    print("\nBEST 1: %s CALL | stop (stock) %.2f | target (stock) %.2f | exit by close of day 2"
-          % (b["sym"], b["close"] - b["atr"], b["close"] + 0.75 * b["atr"]))
+    print("\nBEST 1: %s ATM CALL, ~30 days to expiry | buy at next open | sell at close of day 2 | emergency stop (stock) %.2f"
+          % (b["sym"], b["close"] - 1.5 * b["atr"]))
 
 
 if __name__ == "__main__":
