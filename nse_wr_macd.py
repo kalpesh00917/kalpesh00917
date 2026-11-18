@@ -16,7 +16,10 @@ POLICYBZR POONAWALLA PPLPHARMA PRESTIGE RBLBANK RVNL SBICARD SHREECEM SOLARINDS 
 SYNGENE TATACHEM TATAELXSI TATATECH TIINDIA TORNTPHARM TORNTPOWER UNIONBANK UNITDSPR UNOMINDA UPL VOLTAS
 YESBANK WELCORP ADANIENSOL ADANIGREEN AMBER BAJAJHLDNG HINDPETRO HINDZINC IIFL M&MFIN VBL TITAGARH
 HDFCAMC SWIGGY HYUNDAI WAAREEENER PREMIERENE NUVAMA KAYNES FORCEMOT POWERINDIA ENRIN""".split()
-SYMS = list(dict.fromkeys(FNO + EXTRA))
+try:   # official NSE F&O stock list (from nsearchives.nseindia.com/content/fo/fo_mktlots.csv)
+    SYMS = [k for k in json.load(open("data/nse_fno_lots.json")) if k != "NIFTYFPI"]
+except Exception:
+    SYMS = list(dict.fromkeys(FNO + EXTRA))
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
