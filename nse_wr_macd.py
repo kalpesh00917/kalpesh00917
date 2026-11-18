@@ -45,6 +45,22 @@ def get(s):
             time.sleep(4)
 
 
+def nse_cm_bars(date_str):
+    """Official end-of-day bars from NSE's public cash-market file (date_str like 20261118)."""
+    import io, csv, zipfile
+    url = "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_%s_F_0000.csv.zip" % date_str
+    cmd = ["curl", "-sS", "--http1.1", "-m", "60", "-A", UA, url]
+    import subprocess
+    raw = subprocess.run(cmd, capture_output=True, timeout=90).stdout
+    z = zipfile.ZipFile(io.BytesIO(raw)); rd = csv.DictReader(io.TextIOWrapper(z.open(z.namelist()[0])))
+    out = {}
+    for r in rd:
+        if r["SctySrs"] == "EQ":
+            out[r["TckrSymb"]] = (datetime.date.fromisoformat(r["TradDt"]), float(r["HghPric"]), float(r["LwPric"]),
+                                  float(r["ClsPric"]), float(r["TtlTradgVol"]))
+    return out
+
+
 def weekly(rows):
     wk = {}
     for d, h, l, c, v in rows:
@@ -54,9 +70,18 @@ def weekly(rows):
 
 
 def main():
+    import os
+    only = os.environ.get("ONLY")                      # optional: comma list of symbols to re-check
+    syms = only.split(",") if only else SYMS
+    try:
+        cm = nse_cm_bars(os.environ["NSE_DATE"]) if os.environ.get("NSE_DATE") else {}
+    except Exception:
+        cm = {}
     hits, nodata, checked = [], [], 0
-    for s in SYMS:
-        rows = get(s); time.sleep(0.8)
+    for s in syms:
+        rows = get(s); time.sleep(float(os.environ.get("PAUSE", "0.8")))
+        if rows and s in cm and rows[-1][0] < cm[s][0]:       # Yahoo is a day behind: use NSE's official close
+            rows = rows + [cm[s]]
         if not rows or len(rows) < 300: nodata.append(s); continue
         checked += 1
         W = weekly(rows)
